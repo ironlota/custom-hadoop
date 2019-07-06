@@ -30,3 +30,5 @@ source.me
 *.iml
 .idea
 .DS_Store
+*.bak
+*_bak

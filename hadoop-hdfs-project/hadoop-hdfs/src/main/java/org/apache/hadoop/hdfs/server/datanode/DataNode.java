@@ -84,6 +84,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -154,6 +156,8 @@ import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.StartupOption;
+import org.apache.hadoop.hdfs.server.common.MemoryReader;
+import org.apache.hadoop.hdfs.server.common.Storage;
 import org.apache.hadoop.hdfs.server.common.Storage;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.datanode.SecureDataNodeStarter.SecureResources;
@@ -352,6 +356,8 @@ public class DataNode extends ReconfigurableBase
   private String dnUserName = null;
 
   private SpanReceiverHost spanReceiverHost;
+  
+  private ScheduledExecutorService memoryReaderScheduler = null;
 
   /**
    * Creates a dummy DataNode for testing purpose.
@@ -1772,6 +1778,9 @@ public class DataNode extends ReconfigurableBase
     if (this.spanReceiverHost != null) {
       this.spanReceiverHost.closeReceivers();
     }
+
+    if (memoryReaderScheduler != null) memoryReaderScheduler.shutdown();
+
     if (shortCircuitRegistry != null) shortCircuitRegistry.shutdown();
     LOG.info("Shutdown complete.");
     synchronized(this) {
@@ -2481,6 +2490,8 @@ public class DataNode extends ReconfigurableBase
     int errorCode = 0;
     try {
       StringUtils.startupShutdownMessage(DataNode.class, args, LOG);
+      memoryReaderScheduler = Executors.newSingleThreadScheduledExecutor();
+      memoryReaderScheduler.schedule(new MemoryReader(), 60, TimeUnit.SECONDS);
       DataNode datanode = createDataNode(args, null, resources);
       if (datanode != null) {
         datanode.join();

@@ -37,6 +37,7 @@ import org.apache.hadoop.hdfs.HAUtil;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.protocol.ClientProtocol;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
+import org.apache.hadoop.hdfs.server.common.MemoryReader;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NamenodeRole;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.RollingUpgradeStartupOption;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.StartupOption;
@@ -87,6 +88,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY;
@@ -335,6 +342,8 @@ public class NameNode implements NameNodeStatusMXBean {
    * will be the logical address.
    */
   private String clientNamenodeAddress;
+
+  private ScheduledExecutorService memoryReaderScheduler = null;
   
   /** Format a new filesystem.  Destroys any filesystem that may already
    * exist at this location.  **/
@@ -878,6 +887,12 @@ public class NameNode implements NameNodeStatusMXBean {
         MBeans.unregister(nameNodeStatusBeanName);
         nameNodeStatusBeanName = null;
       }
+
+      
+      if (memoryReaderScheduler != null) {
+        memoryReaderScheduler.shutdown();
+      }
+
       if (this.spanReceiverHost != null) {
         this.spanReceiverHost.closeReceivers();
       }
@@ -1551,6 +1566,8 @@ public class NameNode implements NameNodeStatusMXBean {
 
     try {
       StringUtils.startupShutdownMessage(NameNode.class, argv, LOG);
+      memoryReaderScheduler = Executors.newSingleThreadScheduledExecutor();
+      memoryReaderScheduler.schedule(new MemoryReader(), 60, TimeUnit.SECONDS);
       NameNode namenode = createNameNode(argv, null);
       if (namenode != null) {
         namenode.join();
